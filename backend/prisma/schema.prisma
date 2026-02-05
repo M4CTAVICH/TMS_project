@@ -1,0 +1,439 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER & AUTH ====================
+
+enum UserRole {
+  MANAGER              // Full visibility, no operational interference
+  RAW_STOCK_MANAGER    // Manages raw material stock
+  PRODUCTION_CLIENT    // Orders raw materials, runs production
+  DISTRIBUTOR          // Orders finished products
+  TRANSPORT_PROVIDER   // Manages transport operations
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  firstName    String
+  lastName     String
+  role         UserRole
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  location            Location?
+  ordersCreated       Order[]              @relation("OrderCreator")
+  productionBatches   ProductionBatch[]
+  transportProvider   TransportProvider?
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ==================== LOCATION ====================
+
+model Location {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  latitude    Float
+  longitude   Float
+  locationType String  // RAW_WAREHOUSE, PRODUCTION_FACILITY, DISTRIBUTION_CENTER, etc.
+  userId      String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user                    User?                   @relation(fields: [userId], references: [id])
+  rawStockItems           RawMaterialStock[]
+  productionStockItems    ProductionStock[]
+  finishedStockItems      FinishedProductStock[]
+  ordersFrom              Order[]                 @relation("OrderFromLocation")
+  ordersTo                Order[]                 @relation("OrderToLocation")
+  transportJobsFrom       TransportJob[]          @relation("TransportFromLocation")
+  transportJobsTo         TransportJob[]          @relation("TransportToLocation")
+
+  @@index([locationType])
+  @@map("locations")
+}
+
+// ==================== PRODUCTS ====================
+
+enum ProductType {
+  RAW_MATERIAL
+  FINISHED_PRODUCT
+}
+
+model Product {
+  id              String      @id @default(uuid())
+  name            String
+  description     String?
+  sku             String      @unique
+  type            ProductType
+  unitWeight      Float       // in kg
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  rawStockItems           RawMaterialStock[]
+  productionStockItems    ProductionStock[]
+  finishedStockItems      FinishedProductStock[]
+  orderItems              OrderItem[]
+  productionInputs        ProductionInput[]
+  productionOutputs       ProductionOutput[]
+  recipeInputs            RecipeInput[]
+  recipeOutputs           RecipeOutput[]
+
+  @@index([type])
+  @@index([sku])
+  @@map("products")
+}
+
+// ==================== STOCK MANAGEMENT ====================
+
+// Level 1: Raw Material Stock
+model RawMaterialStock {
+  id          String   @id @default(uuid())
+  productId   String
+  locationId  String
+  quantity    Float    @default(0)
+  reservedQty Float    @default(0) // Reserved for pending orders
+  availableQty Float   @default(0) // quantity - reservedQty (computed)
+  lastUpdated DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  // Relations
+  product  Product  @relation(fields: [productId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([productId, locationId])
+  @@index([locationId])
+  @@map("raw_material_stock")
+}
+
+// Level 2: Production Stock
+model ProductionStock {
+  id          String   @id @default(uuid())
+  productId   String
+  locationId  String
+  quantity    Float    @default(0)
+  reservedQty Float    @default(0)
+  availableQty Float   @default(0)
+  lastUpdated DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  // Relations
+  product  Product  @relation(fields: [productId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([productId, locationId])
+  @@index([locationId])
+  @@map("production_stock")
+}
+
+// Level 3: Finished Product Stock
+model FinishedProductStock {
+  id          String   @id @default(uuid())
+  productId   String
+  locationId  String
+  quantity    Float    @default(0)
+  reservedQty Float    @default(0)
+  availableQty Float   @default(0)
+  lastUpdated DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  // Relations
+  product  Product  @relation(fields: [productId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([productId, locationId])
+  @@index([locationId])
+  @@map("finished_product_stock")
+}
+
+// ==================== ORDERS ====================
+
+enum OrderType {
+  RAW_MATERIAL_ORDER      // Production client orders raw materials
+  FINISHED_PRODUCT_ORDER  // Distributor orders finished products
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  orderNumber       String      @unique
+  type              OrderType
+  status            OrderStatus @default(PENDING)
+  createdById       String
+  fromLocationId    String
+  toLocationId      String
+  
+  // Transport Cost Only
+  transportTotal    Float       @default(0)  // Transport cost only
+  
+  distanceKm        Float
+  
+  orderDate         DateTime    @default(now())
+  deliveryDate      DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  createdBy      User          @relation("OrderCreator", fields: [createdById], references: [id])
+  fromLocation   Location      @relation("OrderFromLocation", fields: [fromLocationId], references: [id])
+  toLocation     Location      @relation("OrderToLocation", fields: [toLocationId], references: [id])
+  items          OrderItem[]
+  transportJob   TransportJob?
+
+  @@index([orderNumber])
+  @@index([status])
+  @@index([type])
+  @@index([createdById])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  productId   String
+  quantity    Float
+  createdAt   DateTime @default(now())
+
+  // Relations
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ==================== TRANSPORT ====================
+
+model TransportProvider {
+  id          String   @id @default(uuid())
+  name        String
+  userId      String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id])
+  vehicles Vehicle[]
+  jobs     TransportJob[]
+
+  @@map("transport_providers")
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  INACTIVE
+}
+
+model Vehicle {
+  id                String        @id @default(uuid())
+  providerId        String
+  name              String
+  licensePlate      String        @unique
+  capacityKg        Float
+  costPerKm         Float
+  status            VehicleStatus @default(AVAILABLE)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  provider    TransportProvider @relation(fields: [providerId], references: [id])
+  allocations VehicleAllocation[]
+
+  @@index([providerId])
+  @@index([status])
+  @@map("vehicles")
+}
+
+enum TransportJobStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model TransportJob {
+  id              String              @id @default(uuid())
+  orderId         String              @unique
+  providerId      String
+  provider        User?
+  fromLocationId  String
+  toLocationId    String
+  distanceKm      Float
+  totalWeight     Float
+  totalCost       Float
+  status          TransportJobStatus  @default(SCHEDULED)
+  scheduledDate   DateTime
+  completedDate   DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  // Relations
+  order        Order               @relation(fields: [orderId], references: [id])
+  provider     TransportProvider   @relation(fields: [providerId], references: [id])
+  fromLocation Location            @relation("TransportFromLocation", fields: [fromLocationId], references: [id])
+  toLocation   Location            @relation("TransportToLocation", fields: [toLocationId], references: [id])
+  allocations  VehicleAllocation[]
+
+  @@index([orderId])
+  @@index([providerId])
+  @@index([status])
+  @@map("transport_jobs")
+}
+
+model VehicleAllocation {
+  id          String   @id @default(uuid())
+  jobId       String
+  vehicleId   String
+  cost        Float    // vehicle costPerKm * distance
+  createdAt   DateTime @default(now())
+
+  // Relations
+  job     TransportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  vehicle Vehicle      @relation(fields: [vehicleId], references: [id])
+
+  @@index([jobId])
+  @@index([vehicleId])
+  @@map("vehicle_allocations")
+}
+
+// ==================== PRODUCTION ====================
+
+model Recipe {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  inputs  RecipeInput[]
+  outputs RecipeOutput[]
+  batches ProductionBatch[]
+
+  @@map("recipes")
+}
+
+model RecipeInput {
+  id         String   @id @default(uuid())
+  recipeId   String
+  productId  String
+  quantity   Float    // Required quantity of raw material
+  createdAt  DateTime @default(now())
+
+  // Relations
+  recipe  Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([recipeId])
+  @@map("recipe_inputs")
+}
+
+model RecipeOutput {
+  id         String   @id @default(uuid())
+  recipeId   String
+  productId  String
+  quantity   Float    // Expected output quantity
+  createdAt  DateTime @default(now())
+
+  // Relations
+  recipe  Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([recipeId])
+  @@map("recipe_outputs")
+}
+
+enum ProductionBatchStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model ProductionBatch {
+  id              String                @id @default(uuid())
+  batchNumber     String                @unique
+  recipeId        String
+  producedById    String
+  locationId      String                // Production location
+  status          ProductionBatchStatus @default(PLANNED)
+  multiplier      Float                 @default(1) // Recipe multiplier
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  recipe      Recipe             @relation(fields: [recipeId], references: [id])
+  producedBy  User               @relation(fields: [producedById], references: [id])
+  inputs      ProductionInput[]
+  outputs     ProductionOutput[]
+
+  @@index([batchNumber])
+  @@index([status])
+  @@map("production_batches")
+}
+
+model ProductionInput {
+  id          String   @id @default(uuid())
+  batchId     String
+  productId   String
+  quantityUsed Float
+  createdAt   DateTime @default(now())
+
+  // Relations
+  batch   ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+
+  @@index([batchId])
+  @@map("production_inputs")
+}
+
+model ProductionOutput {
+  id              String   @id @default(uuid())
+  batchId         String
+  productId       String
+  quantityProduced Float
+  createdAt       DateTime @default(now())
+
+  // Relations
+  batch   ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+
+  @@index([batchId])
+  @@map("production_outputs")
+}
+
+
