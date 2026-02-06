@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { stockService } from "../api/services/stock.service";
-import { UpdateStockRequest } from "../types/api.types";
+import { type UpdateStockRequest } from "../types/api.types";
 import { toast } from "sonner";
 
 export const useRawMaterialStock = (params?: {
