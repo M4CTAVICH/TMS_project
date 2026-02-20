@@ -258,41 +258,6 @@ async function main() {
 
   console.log('✅ Transport provider and vehicles created');
 
-  console.log('Creating sample recipe...');
-
-  const widgetRecipe = await prisma.recipe.create({
-    data: {
-      name: 'Widget Production Recipe',
-      description: 'Standard recipe for producing industrial widgets',
-      isActive: true,
-    },
-  });
-
-  await prisma.recipeInput.createMany({
-    data: [
-      {
-        recipeId: widgetRecipe.id,
-        productId: steelRod.id,
-        quantity: 2,
-      },
-      {
-        recipeId: widgetRecipe.id,
-        productId: plasticPellets.id,
-        quantity: 10,
-      },
-    ],
-  });
-
-  await prisma.recipeOutput.create({
-    data: {
-      recipeId: widgetRecipe.id,
-      productId: finishedWidget.id,
-      quantity: 1,
-    },
-  });
-
-  console.log('✅ Recipe created');
-
   console.log('\n='.repeat(50));
   console.log('✅ Database seeded successfully!');
   console.log('='.repeat(50));

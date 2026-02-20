@@ -14,6 +14,7 @@ import { ProductManagementPage } from "./pages/ProductManagementPage";
 import { StockManagementPage } from "./pages/StockManagementPage";
 import { TransportManagementPage } from "./pages/TransportManagementPage";
 import { LocationsManagementPage } from "./pages/LocationsManagementPage";
+import { UserManagementPage } from "./pages/UserManagementPage";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { useAuthStore } from "./store/authStore";
 import { CartPage } from "./pages/CartPage";
@@ -74,8 +75,7 @@ function App() {
         <Route path="/locations" element={<LocationsManagementPage />} />
         <Route
           path="/users"
-          element={
-            <div className="text-white">User Management - Coming Soon</div>
+          element={<UserManagementPage />
           }
         />
       </Route>

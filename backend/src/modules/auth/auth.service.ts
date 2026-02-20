@@ -97,41 +97,7 @@ export class AuthService {
 
     return { message: 'Password changed successfully' };
   }
-async register(data: { email: string; password: string; firstName: string; lastName: string }) {
-  const { email, password, firstName, lastName } = data;
 
-  // Check if user already exists
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (existingUser) {
-    throw new BadRequestError('Email already registered');
-  }
-
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  // Create user as MANAGER
-  const user = await prisma.user.create({
-    data: {
-      email,
-      password: hashedPassword,
-      firstName,
-      lastName,
-      role: 'MANAGER',
-      isActive: true,
-    },
-  });
-
-  return {
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    role: user.role,
-  };
-}
 async createUser(data: { 
   email: string; 
   password: string; 

@@ -32,6 +32,10 @@ router.post(
     body('role')
       .isIn(Object.values(ROLES))
       .withMessage('Valid role is required'),
+    body('locationId')
+      .optional()
+      .isString()
+      .withMessage('Location ID must be a valid string'),
     validate,
   ],
   createUser
@@ -50,6 +54,14 @@ router.put(
   [
     body('firstName').optional().notEmpty(),
     body('lastName').optional().notEmpty(),
+    body('role')
+      .optional()
+      .isIn(Object.values(ROLES))
+      .withMessage('Valid role is required'),
+    body('locationId')
+      .optional()
+      .isString()
+      .withMessage('Location ID must be a valid string'),
     body('isActive').optional().isBoolean(),
     validate,
   ],

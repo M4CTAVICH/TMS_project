@@ -2,23 +2,11 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { login, verifyToken, changePassword, getProfile } from './auth.controller';
 import { validate } from '../../shared/middleware/validator';
-import { authenticate } from '../../shared/middleware/auth';
-import { register } from './auth.controller';
+import { authenticate, authorize } from '../../shared/middleware/auth';
 import { createUser } from './auth.controller';
+import { ROLES } from '../../config/constants';
 const router = Router();
 
-
-router.post(
-  '/register',
-  [
-    body('email').isEmail().withMessage('Valid email is required'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    body('firstName').notEmpty().withMessage('First name is required'),
-    body('lastName').notEmpty().withMessage('Last name is required'),
-    validate,
-  ],
-  register
-);
 
 router.post(
   '/login',
@@ -48,7 +36,7 @@ router.post(
 );
 router.post(
   '/users',
-  authenticate,
+  authorize(ROLES.MANAGER),
   [
     body('email').isEmail().withMessage('Valid email is required'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),

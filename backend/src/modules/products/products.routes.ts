@@ -29,9 +29,6 @@ router.post(
     body('unitWeight')
       .isFloat({ min: 0.01 })
       .withMessage('Unit weight must be greater than 0'),
-    body('unitPrice')
-      .isFloat({ min: 0 })
-      .withMessage('Unit price must be 0 or greater'),
     validate,
   ],
   createProduct

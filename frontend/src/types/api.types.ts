@@ -83,6 +83,35 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+
+export interface CreateUserRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  locationId?: string;
+}
+
+export interface UpdateUserRequest {
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  locationId?: string;
+  isActive?: boolean;
+}
+
+export interface UsersListResponse {
+  data: User[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+}
+
+
 export interface Location {
   id: string;
   name: string;

@@ -21,6 +21,7 @@ import { reportsService } from "../api/services/reports.service";
 import { stockService } from "../api/services/stock.service";
 import { transportService } from "../api/services/transport.service";
 import { Link } from "react-router-dom";
+import { AppHeader } from "@/components/layout/AppHeader";
 
 export const DashboardPage = () => {
   const { user } = useAuthStore();
@@ -136,13 +137,6 @@ const ManagerDashboard = () => {
       color: "from-green-600 to-emerald-600",
     },
     {
-      label: "Production",
-      description: "Track production batches",
-      icon: Factory,
-      href: "/production",
-      color: "from-orange-600 to-red-600",
-    },
-    {
       label: "Transport",
       description: "Manage transport operations",
       icon: Truck,
@@ -183,6 +177,7 @@ const ManagerDashboard = () => {
           Here's what's happening with your Transport platform today.
         </p>
       </div>
+      <AppHeader />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -706,21 +701,6 @@ const ProductionClientDashboard = () => {
       <div>
         <h2 className="text-xl font-bold text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Link
-            to="/production"
-            className="group bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 hover:bg-white/10 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/20 transition-all"
-          >
-            <div className="inline-flex p-3 rounded-lg bg-gradient-to-br from-orange-600 to-red-600 mb-4 group-hover:scale-110 transition-transform">
-              <Factory className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-1">
-              Production
-            </h3>
-            <p className="text-sm text-gray-400">
-              Manage production batches and recipes
-            </p>
-          </Link>
-
           <Link
             to="/stock"
             className="group bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6 hover:bg-white/10 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/20 transition-all"

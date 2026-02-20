@@ -4,7 +4,7 @@ import { CreateUserDTO, UpdateUserDTO } from '../../shared/types';
 import { BadRequestError, NotFoundError, ConflictError } from '../../shared/errors/AppError';
 import { getPaginationParams, getPaginationMeta } from '../../shared/utils/pagination';
 
-export class UserService {
+export class UsersService {
   async createUser(data: CreateUserDTO) {
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
@@ -78,7 +78,6 @@ export class UserService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
-        location: true,
       },
     });
 

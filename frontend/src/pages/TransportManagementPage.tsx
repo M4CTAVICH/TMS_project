@@ -35,11 +35,24 @@ export const TransportManagementPage = () => {
   const [activeTab, setActiveTab] = useState<TabType>("jobs");
   const { user } = useAuthStore();
 
+  // Build tabs based on user role
   const tabs = [
     { id: "jobs" as TabType, label: "Transport Jobs", icon: Truck },
     { id: "vehicles" as TabType, label: "Vehicles", icon: Package },
-    { id: "providers" as TabType, label: "Providers", icon: User },
+    // Only managers can see providers
+    ...(user?.role === "MANAGER" 
+      ? [{ id: "providers" as TabType, label: "Providers", icon: User }]
+      : []
+    ),
   ];
+
+  // Reset to jobs tab if current tab is not allowed
+  useEffect(() => {
+    const isTabAllowed = tabs.some(tab => tab.id === activeTab);
+    if (!isTabAllowed && activeTab !== "jobs") {
+      setActiveTab("jobs");
+    }
+  }, [user?.role, activeTab, tabs]);
 
   return (
     <div className="space-y-6">
@@ -80,7 +93,7 @@ export const TransportManagementPage = () => {
       <div className="mt-6">
         {activeTab === "jobs" && <TransportJobsTab />}
         {activeTab === "vehicles" && <VehiclesTab />}
-        {activeTab === "providers" && <ProvidersTab />}
+        {activeTab === "providers" && user?.role === "MANAGER" && <ProvidersTab />}
       </div>
     </div>
   );
@@ -1175,8 +1188,7 @@ const ProviderFormModal = ({
             ) : users.length === 0 ? (
               <div className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg">
                 <p className="text-yellow-400 text-sm">
-                  No available users. All TRANSPORT_PROVIDER users already have
-                  providers.
+                  No available users to add a new provider. Please create a user with TRANSPORT_PROVIDER role.
                 </p>
               </div>
             ) : (

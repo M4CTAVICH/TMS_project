@@ -14,14 +14,6 @@ export const login = asyncHandler(
 );
 
 
-export const register = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const result = await authService.register(req.body);
-    sendSuccess(res, result, 'User registered successfully', 201);
-  }
-);
-
-
 export const verifyToken = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     const token = req.headers.authorization?.substring(7);

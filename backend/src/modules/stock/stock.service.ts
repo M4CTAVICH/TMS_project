@@ -187,7 +187,7 @@ export class StockService {
 
     return updatedStock;
   }
-
+  
 
   async getFinishedProductStock(locationId?: string, productId?: string) {
     const where: any = {};

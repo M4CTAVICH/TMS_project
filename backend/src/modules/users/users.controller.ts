@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserService } from './users.service';
+import { UsersService } from './users.service';
 import { asyncHandler } from '../../shared/middleware/asyncHandler';
 import { sendSuccess, sendCreated } from '../../shared/utils/response';
 
-const userService = new UserService();
+const userService = new UsersService();
 
 export const createUser = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {

@@ -16,7 +16,7 @@ import { CartIcon } from "../components/layout/CartIcon";
 import { LandingHeader } from "../components/layout/LandingHeader";
 
 export const LandingPage = () => {
-  const { isAuthenticated, user, clearAuth } = useAuthStore();
+  const { isAuthenticated, clearAuth } = useAuthStore();
 
   const features = [
     {

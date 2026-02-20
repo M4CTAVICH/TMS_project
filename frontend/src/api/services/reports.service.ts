@@ -39,11 +39,6 @@ export interface DashboardStats {
       items: number;
     };
   };
-  production: {
-    totalBatches: number;
-    byStatus: Record<string, number>;
-    outputLastMonth: number;
-  };
   payments: {
     total: number;
     byStatus: Record<string, number>;

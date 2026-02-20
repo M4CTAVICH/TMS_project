@@ -13,8 +13,9 @@ export const endpoints = {
   users: {
     base: "/users",
     byId: (id: string) => `/users/${id}`,
+    activate: (id: string) => `/users/${id}/activate`,
+    deactivate: (id: string) => `/users/${id}/deactivate`,
   },
-
   //Locations
   locations: {
     base: "/locations",
@@ -70,14 +71,5 @@ export const endpoints = {
     jobById: (id: string) => `/transport/jobs/${id}`,
     updateJobStatus: (id: string) => `/transport/jobs/${id}/status`,
     calculateCost: "/transport/calculate-cost",
-  },
-
-  // Payments
-  payments: {
-    base: "/payments",
-    byId: (id: string) => `/payments/${id}`,
-    byOrder: (orderId: string) => `/payments/order/${orderId}`,
-    complete: (id: string) => `/payments/${id}/complete`,
-    refund: (id: string) => `/payments/${id}/refund`,
   },
 } as const;

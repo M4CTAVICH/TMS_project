@@ -1,18 +1,18 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: logistics_db
+  mysql:
+    image: mysql:8
+    container_name: smart-tms-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: logistics_db
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: smart_tms
     ports:
-      - "5432:5432"
+      - "3307:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,7 +20,7 @@ services:
   # Optional: pgAdmin for database management
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: logistics_pgadmin
+    container_name: smart-tms-pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@logistics.com
@@ -31,10 +31,10 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
-      - postgres
+      - mysql
 
 volumes:
-  postgres_data:
+  mysql_data:
     driver: local
   pgadmin_data:
     driver: local
