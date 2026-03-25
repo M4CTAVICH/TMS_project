@@ -62,10 +62,11 @@ export interface User {
   firstName: string;
   lastName: string;
   role: UserRole;
+  locationId?: string;
+  location?: Location;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  location?: Location;
 }
 
 export interface LoginRequest {
@@ -250,7 +251,8 @@ export interface Order {
 export interface CreateOrderRequest {
   type: OrderType;
   fromLocationId: string;
-  toLocationId: string;
+  toLocationId?: string;
+  confirmingUserId: string;
   transportProviderId: string;
   items: {
     productId: string;

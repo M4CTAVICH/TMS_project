@@ -2,10 +2,10 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProductsPage } from "./pages/ProductsPage";
-import { CheckoutPage } from "./pages/CheckoutPage";
 import { MainLayout } from "./components/layout/MainLayout";
 import { OrderDetailsPage } from "./pages/OrderDetailsPage";
 import { OrdersPage } from "./pages/OrdersPage";
+import { OrderCreationPage } from "./pages/OrderCreationPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { OrderManagementPage } from "./pages/OrderManagementPage";
@@ -17,7 +17,6 @@ import { LocationsManagementPage } from "./pages/LocationsManagementPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { useAuthStore } from "./store/authStore";
-import { CartPage } from "./pages/CartPage";
 import { useEffect } from "react";
 
 function App() {
@@ -38,13 +37,21 @@ function App() {
         element={
           isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
         }
-      />
-      <Route path="/cart" element={<CartPage />} />
-      <Route path="/checkout" element={<CheckoutPage />} />
-      <Route path="/profile" element={<ProfilePage />} />
+      />      <Route path="/profile" element={<ProfilePage />} />
 
       {/* Public Order Routes */}
       <Route path="/orders" element={<OrdersPage />} />
+      
+      {/* Protected Order Creation Route */}
+      <Route
+        path="/orders/create"
+        element={
+          <ProtectedRoute>
+            <OrderCreationPage />
+          </ProtectedRoute>
+        }
+      />
+      
       <Route path="/orders/:orderId" element={<OrderDetailsPage />} />
 
       {/* Protected Routes with Sidebar (Dashboard) */}

@@ -96,4 +96,18 @@ export const stockService = {
     );
     return (response.data as any).data;
   },
+
+  // Get available products at a location
+  getAvailableProductsAtLocation: async (
+    locationId: string,
+    type?: "RAW_MATERIAL" | "FINISHED_PRODUCT"
+  ) => {
+    const queryParams = new URLSearchParams();
+    if (type) queryParams.append("type", type);
+
+    const response = await apiClient.get<ApiResponse<any>>(
+      `${endpoints.stock.availableProducts(locationId)}?${queryParams}`
+    );
+    return (response.data as any).data.products;
+  },
 };

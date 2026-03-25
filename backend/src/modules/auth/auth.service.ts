@@ -45,6 +45,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        locationId: user.locationId,
       },
     };
   }
@@ -67,6 +68,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        locationId: user.locationId,
       };
     } catch (error) {
       throw new UnauthorizedError('Invalid token');

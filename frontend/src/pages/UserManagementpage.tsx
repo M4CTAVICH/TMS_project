@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   UserPlus,
   Search,
@@ -17,9 +18,10 @@ import {
 } from "lucide-react";
 import { useUsers } from "../hooks/useUsers";
 import { useAuthStore } from "../store/authStore";
+import { locationsService } from "../api/services/locations.service";
 import { format } from "date-fns";
 import { AppHeader } from "../components/layout/AppHeader";
-import type { User } from "../types/api.types";
+import type { User, Location } from "../types/api.types";
 
 const ROLES = {
   MANAGER: "Manager",
@@ -46,6 +48,12 @@ export const UserManagementPage = () => {
     lastName: "",
     role: "RAW_STOCK_MANAGER",
     locationId: "",
+  });
+
+  // Fetch locations
+  const { data: locations = [] } = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => locationsService.getLocations(),
   });
 
   const {
@@ -99,7 +107,7 @@ export const UserManagementPage = () => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        locationId: "",
+        locationId: user.locationId || "",
       });
     } else {
       setEditingUser(null);
@@ -123,6 +131,26 @@ export const UserManagementPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate location requirement for non-MANAGER and non-TRANSPORT_PROVIDER roles
+    if (
+      formData.role !== "MANAGER" &&
+      formData.role !== "TRANSPORT_PROVIDER" &&
+      !formData.locationId
+    ) {
+      alert(
+        `Users with role ${ROLES[formData.role as RoleKey]} must have a location assigned`
+      );
+      return;
+    }
+
+    if (
+      (formData.role === "MANAGER" || formData.role === "TRANSPORT_PROVIDER") &&
+      formData.locationId
+    ) {
+      alert(`${formData.role} users should not have a location assigned`);
+      return;
+    }
+
     if (editingUser) {
       updateUserMutation.mutate({
         id: editingUser.id,
@@ -130,7 +158,9 @@ export const UserManagementPage = () => {
           firstName: formData.firstName,
           lastName: formData.lastName,
           role: formData.role,
-          locationId: formData.locationId || undefined,
+          ...(formData.role !== "MANAGER" && formData.role !== "TRANSPORT_PROVIDER" && {
+            locationId: formData.locationId || null,
+          }),
         },
       });
     } else {
@@ -138,7 +168,20 @@ export const UserManagementPage = () => {
         alert("Password is required for new users");
         return;
       }
-      createUserMutation.mutate(formData);
+      const userData: any = {
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+      };
+      
+      // Only include locationId for roles that require it
+      if (formData.role !== "MANAGER" && formData.role !== "TRANSPORT_PROVIDER") {
+        userData.locationId = formData.locationId || null;
+      }
+      
+      createUserMutation.mutate(userData);
     }
 
     handleCloseModal();
@@ -275,6 +318,9 @@ export const UserManagementPage = () => {
                         Role
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                        Location
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
                         Status
                       </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
@@ -326,6 +372,23 @@ export const UserManagementPage = () => {
                           >
                             {ROLES[user.role as RoleKey]}
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.location ? (
+                            <div className="flex items-center gap-2 text-gray-300">
+                              <MapPin className="w-4 h-4 text-cyan-400" />
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {user.location.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {user.location.locationType}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-500 text-sm">-</span>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           {user.isActive ? (
@@ -507,9 +570,15 @@ export const UserManagementPage = () => {
                 </label>
                 <select
                   value={formData.role}
-                  onChange={(e) =>
-                    setFormData({ ...formData, role: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setFormData({
+                      ...formData,
+                      role: newRole,
+                      // Clear location if MANAGER or TRANSPORT_PROVIDER role is selected
+                      locationId: newRole === "MANAGER" || newRole === "TRANSPORT_PROVIDER" ? "" : formData.locationId,
+                    });
+                  }}
                   required
                   className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none"
                 >
@@ -521,21 +590,37 @@ export const UserManagementPage = () => {
                 </select>
               </div>
 
-              {/* Location ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Location (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={formData.locationId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, locationId: e.target.value })
-                  }
-                  placeholder="Location ID"
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
-              </div>
+              {/* Location - Only show if not MANAGER or TRANSPORT_PROVIDER role */}
+              {formData.role !== "MANAGER" && formData.role !== "TRANSPORT_PROVIDER" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Location *
+                    <span className="text-red-400 ml-1">Required</span>
+                  </label>
+                  {locations.length > 0 ? (
+                    <select
+                      value={formData.locationId}
+                      onChange={(e) =>
+                        setFormData({ ...formData, locationId: e.target.value })
+                      }
+                      required
+                      className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none appearance-none"
+                    >
+                      <option value="">Select a location</option>
+                      {locations.map((location: Location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.name} ({location.locationType})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-500 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading locations...
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Submit & Cancel */}
               <div className="flex gap-3 pt-4">

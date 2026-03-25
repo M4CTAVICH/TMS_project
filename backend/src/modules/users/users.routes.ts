@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { body } from 'express-validator';
+import { body, validationResult } from 'express-validator';
 import {
   createUser,
   getUsers,
@@ -17,6 +17,29 @@ const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+
+// Custom validation middleware for location requirement
+const validateLocationRequirement = (req, res, next) => {
+  const role = req.body.role;
+
+  if (role && role !== 'MANAGER' && role !== 'TRANSPORT_PROVIDER') {
+    if (!req.body.locationId) {
+      return res.status(400).json({
+        success: false,
+        message: `Users with role ${role} must have a location assigned`,
+      });
+    }
+  }
+
+  if ((role === 'MANAGER' || role === 'TRANSPORT_PROVIDER') && req.body.locationId) {
+    return res.status(400).json({
+      success: false,
+      message: `${role} users should not have a location assigned`,
+    });
+  }
+
+  next();
+};
 
 // Create user (Manager only)
 router.post(
@@ -38,6 +61,7 @@ router.post(
       .withMessage('Location ID must be a valid string'),
     validate,
   ],
+  validateLocationRequirement,
   createUser
 );
 
@@ -65,6 +89,7 @@ router.put(
     body('isActive').optional().isBoolean(),
     validate,
   ],
+  validateLocationRequirement,
   updateUser
 );
 

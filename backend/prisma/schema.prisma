@@ -27,7 +27,7 @@ model User {
   firstName    String
   lastName    String
   role         UserRole
-  locationId   String?  // NULL only for MANAGER role
+  locationId   String?  // NULL for MANAGER and TRANSPORT_PROVIDER roles (they don't have a location)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -35,6 +35,7 @@ model User {
   // Relations
   location            Location?            @relation(fields: [locationId], references: [id], onDelete: SetNull)
   ordersCreated       Order[]              @relation("OrderCreator")
+  ordersConfirming    Order[]              @relation("OrderConfirmer")
   productionBatches   ProductionBatch[]
   transportProvider   TransportProvider?
 
@@ -187,6 +188,7 @@ model Order {
   type              OrderType
   status            OrderStatus @default(PENDING)
   createdById       String
+  confirmingUserId  String?     // User at fromLocation responsible for confirming order
   fromLocationId    String
   toLocationId      String
   
@@ -202,6 +204,7 @@ model Order {
 
   // Relations
   createdBy      User          @relation("OrderCreator", fields: [createdById], references: [id])
+  confirmingUser User?         @relation("OrderConfirmer", fields: [confirmingUserId], references: [id], onDelete: SetNull)
   fromLocation   Location      @relation("OrderFromLocation", fields: [fromLocationId], references: [id])
   toLocation     Location      @relation("OrderToLocation", fields: [toLocationId], references: [id])
   items          OrderItem[]
@@ -211,6 +214,7 @@ model Order {
   @@index([status])
   @@index([type])
   @@index([createdById])
+  @@index([confirmingUserId])
   @@map("orders")
 }
 

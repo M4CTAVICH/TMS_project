@@ -30,17 +30,6 @@ export class LocationService {
 
   async getLocations() {
     const locations = await prisma.location.findMany({
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -50,17 +39,6 @@ export class LocationService {
   async getLocationById(id: string) {
     const location = await prisma.location.findUnique({
       where: { id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
     });
 
     if (!location) {

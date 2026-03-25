@@ -9,9 +9,27 @@ interface UpdateStockDTO {
 
 export class StockService {
   
-  async getRawMaterialStock(locationId?: string, productId?: string) {
+  async getRawMaterialStock(
+    locationId?: string,
+    productId?: string,
+    userId?: string,
+    userRole?: string,
+    userLocationId?: string | null
+  ) {
     const where: any = {};
-    if (locationId) where.locationId = locationId;
+    
+    // Location-based filtering for non-MANAGER roles
+    if (userRole && userRole !== 'MANAGER') {
+      if (userLocationId) {
+        where.locationId = userLocationId;
+      } else {
+        return []; // User has no assigned location
+      }
+    } else if (locationId) {
+      // MANAGER can filter by specific location if provided
+      where.locationId = locationId;
+    }
+    
     if (productId) where.productId = productId;
 
     const stock = await prisma.rawMaterialStock.findMany({
@@ -99,9 +117,27 @@ export class StockService {
   }
 
 
-  async getProductionStock(locationId?: string, productId?: string) {
+  async getProductionStock(
+    locationId?: string,
+    productId?: string,
+    userId?: string,
+    userRole?: string,
+    userLocationId?: string | null
+  ) {
     const where: any = {};
-    if (locationId) where.locationId = locationId;
+    
+    // Location-based filtering for non-MANAGER roles
+    if (userRole && userRole !== 'MANAGER') {
+      if (userLocationId) {
+        where.locationId = userLocationId;
+      } else {
+        return []; // User has no assigned location
+      }
+    } else if (locationId) {
+      // MANAGER can filter by specific location if provided
+      where.locationId = locationId;
+    }
+    
     if (productId) where.productId = productId;
 
     const stock = await prisma.productionStock.findMany({
@@ -189,9 +225,27 @@ export class StockService {
   }
   
 
-  async getFinishedProductStock(locationId?: string, productId?: string) {
+  async getFinishedProductStock(
+    locationId?: string,
+    productId?: string,
+    userId?: string,
+    userRole?: string,
+    userLocationId?: string | null
+  ) {
     const where: any = {};
-    if (locationId) where.locationId = locationId;
+    
+    // Location-based filtering for non-MANAGER roles
+    if (userRole && userRole !== 'MANAGER') {
+      if (userLocationId) {
+        where.locationId = userLocationId;
+      } else {
+        return []; // User has no assigned location
+      }
+    } else if (locationId) {
+      // MANAGER can filter by specific location if provided
+      where.locationId = locationId;
+    }
+    
     if (productId) where.productId = productId;
 
     const stock = await prisma.finishedProductStock.findMany({
@@ -279,19 +333,37 @@ export class StockService {
   }
 
 
-  async getStockOverview() {
+  async getStockOverview(userId?: string, userRole?: string, userLocationId?: string | null) {
+    const whereClause: any = {};
+    
+    // Location-based filtering for non-MANAGER roles
+    if (userRole && userRole !== 'MANAGER') {
+      if (userLocationId) {
+        whereClause.locationId = userLocationId;
+      } else {
+        return {
+          rawMaterial: { totalQuantity: 0, totalReserved: 0, totalAvailable: 0, itemCount: 0 },
+          production: { totalQuantity: 0, totalReserved: 0, totalAvailable: 0, itemCount: 0 },
+          finishedProduct: { totalQuantity: 0, totalReserved: 0, totalAvailable: 0, itemCount: 0 },
+        };
+      }
+    }
+
     const [rawStock, productionStock, finishedStock] = await Promise.all([
       prisma.rawMaterialStock.aggregate({
         _sum: { quantity: true, reservedQty: true },
         _count: true,
+        where: whereClause,
       }),
       prisma.productionStock.aggregate({
         _sum: { quantity: true, reservedQty: true },
         _count: true,
+        where: whereClause,
       }),
       prisma.finishedProductStock.aggregate({
         _sum: { quantity: true, reservedQty: true },
         _count: true,
+        where: whereClause,
       }),
     ]);
 
@@ -317,5 +389,134 @@ export class StockService {
         itemCount: finishedStock._count,
       },
     };
+  }
+
+  async getAvailableProductsAtLocation(
+    locationId: string,
+    productType?: 'RAW_MATERIAL' | 'FINISHED_PRODUCT',
+    userRole?: string,
+    userLocationId?: string | null
+  ) {
+    // Note: No location access restrictions here - users can see products from any location
+    // when ordering. The confirming user selection (from fromLocation) is validated in the
+    // order service.
+
+    // Determine which stock table to query based on product type
+    let result = [];
+
+    if (!productType || productType === 'RAW_MATERIAL') {
+      const rawStock = await prisma.rawMaterialStock.findMany({
+        where: {
+          locationId,
+          quantity: { gt: 0 },
+        },
+        include: {
+          product: true,
+        },
+      });
+
+      result.push(
+        ...rawStock
+          .filter((item) => item.product && item.product.isActive && item.product.type === 'RAW_MATERIAL')
+          .map((item) => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.product.name,
+            productType: item.product.type,
+            quantity: item.quantity,
+            reservedQty: item.reservedQty,
+            availableQty: item.quantity - item.reservedQty,
+            unitWeight: item.product.unitWeight,
+          }))
+      );
+    }
+
+    if (!productType || productType === 'RAW_MATERIAL') {
+      const productionRawStock = await prisma.productionStock.findMany({
+        where: {
+          locationId,
+          quantity: { gt: 0 },
+        },
+        include: {
+          product: true,
+        },
+      });
+
+      result.push(
+        ...productionRawStock
+          .filter((item) => item.product && item.product.isActive && item.product.type === 'RAW_MATERIAL')
+          .map((item) => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.product.name,
+            productType: item.product.type,
+            quantity: item.quantity,
+            reservedQty: item.reservedQty,
+            availableQty: item.quantity - item.reservedQty,
+            unitWeight: item.product.unitWeight,
+          }))
+      );
+    }
+
+    if (!productType || productType === 'FINISHED_PRODUCT') {
+      const finishedStock = await prisma.finishedProductStock.findMany({
+        where: {
+          locationId,
+          quantity: { gt: 0 },
+        },
+        include: {
+          product: true,
+        },
+      });
+
+      result.push(
+        ...finishedStock
+          .filter((item) => item.product && item.product.isActive && item.product.type === 'FINISHED_PRODUCT')
+          .map((item) => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.product.name,
+            productType: item.product.type,
+            quantity: item.quantity,
+            reservedQty: item.reservedQty,
+            availableQty: item.quantity - item.reservedQty,
+            unitWeight: item.product.unitWeight,
+          }))
+      );
+    }
+
+    if (!productType || productType === 'FINISHED_PRODUCT') {
+      const productionFinishedStock = await prisma.productionStock.findMany({
+        where: {
+          locationId,
+          quantity: { gt: 0 },
+        },
+        include: {
+          product: true,
+        },
+      });
+
+      result.push(
+        ...productionFinishedStock
+          .filter((item) => item.product && item.product.isActive && item.product.type === 'FINISHED_PRODUCT')
+          .map((item) => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.product.name,
+            productType: item.product.type,
+            quantity: item.quantity,
+            reservedQty: item.reservedQty,
+            availableQty: item.quantity - item.reservedQty,
+            unitWeight: item.product.unitWeight,
+          }))
+      );
+    }
+
+    // Remove duplicates (same product in multiple stock tables) and sort
+    const uniqueProducts = Array.from(
+      new Map(result.map((item) => [item.productId, item])).values()
+    );
+
+    return uniqueProducts.sort((a, b) => a.productName.localeCompare(b.productName));
   }
 }

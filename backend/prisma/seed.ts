@@ -20,16 +20,62 @@ async function main() {
     },
   });
 
+  // Create locations first so we can assign users to them
+  console.log('Creating locations...');
+
+  const rawWarehouse = await prisma.location.upsert({
+    where: { id: 'raw-warehouse-1' },
+    update: {},
+    create: {
+      id: 'raw-warehouse-1',
+      name: 'Main Raw Materials Warehouse',
+      address: '123 Warehouse St, Industrial Zone',
+      latitude: 40.7128,
+      longitude: -74.006,
+      locationType: 'RAW_WAREHOUSE',
+    },
+  });
+
+  const productionFacility = await prisma.location.upsert({
+    where: { id: 'production-facility-1' },
+    update: {},
+    create: {
+      id: 'production-facility-1',
+      name: 'Main Production Facility',
+      address: '456 Factory Rd, Industrial Park',
+      latitude: 40.7589,
+      longitude: -73.9851,
+      locationType: 'PRODUCTION_FACILITY',
+    },
+  });
+
+  const distributionCenter = await prisma.location.upsert({
+    where: { id: 'distribution-center-1' },
+    update: {},
+    create: {
+      id: 'distribution-center-1',
+      name: 'Central Distribution Center',
+      address: '789 Distribution Ave, Commerce District',
+      latitude: 40.7306,
+      longitude: -73.9352,
+      locationType: 'DISTRIBUTION_CENTER',
+    },
+  });
+
+  console.log('✅ Locations created');
+
+  // Now create users with assigned locations
   const rawStockPassword = await bcrypt.hash('securePassword123', 10);
   const rawStockManager = await prisma.user.upsert({
     where: { email: 'stockmanager@example.com' },
-    update: {},
+    update: { locationId: rawWarehouse.id },
     create: {
       email: 'stockmanager@example.com',
       password: rawStockPassword,
       firstName: 'Raw Stock',
       lastName: 'Manager',
       role: 'RAW_STOCK_MANAGER',
+      locationId: rawWarehouse.id,
       isActive: true,
     },
   });
@@ -37,13 +83,14 @@ async function main() {
   const productionPassword = await bcrypt.hash('securePassword123', 10);
   const productionClient = await prisma.user.upsert({
     where: { email: 'production@example.com' },
-    update: {},
+    update: { locationId: productionFacility.id },
     create: {
       email: 'production@example.com',
       password: productionPassword,
       firstName: 'Production',
       lastName: 'Client',
       role: 'PRODUCTION_CLIENT',
+      locationId: productionFacility.id,
       isActive: true,
     },
   });
@@ -51,13 +98,14 @@ async function main() {
   const distributorPassword = await bcrypt.hash('securePassword123', 10);
   const distributor = await prisma.user.upsert({
     where: { email: 'distributor@example.com' },
-    update: {},
+    update: { locationId: distributionCenter.id },
     create: {
       email: 'distributor@example.com',
       password: distributorPassword,
       firstName: 'Main',
       lastName: 'Distributor',
       role: 'DISTRIBUTOR',
+      locationId: distributionCenter.id,
       isActive: true,
     },
   });
@@ -77,52 +125,6 @@ async function main() {
   });
 
   console.log('✅ Users created');
-
-  console.log('Creating locations...');
-
-  const rawWarehouse = await prisma.location.upsert({
-    where: { id: 'raw-warehouse-1' },
-    update: {},
-    create: {
-      id: 'raw-warehouse-1',
-      name: 'Main Raw Materials Warehouse',
-      address: '123 Warehouse St, Industrial Zone',
-      latitude: 40.7128,
-      longitude: -74.006,
-      locationType: 'RAW_WAREHOUSE',
-      userId: rawStockManager.id,
-    },
-  });
-
-  const productionFacility = await prisma.location.upsert({
-    where: { id: 'production-facility-1' },
-    update: {},
-    create: {
-      id: 'production-facility-1',
-      name: 'Main Production Facility',
-      address: '456 Factory Rd, Industrial Park',
-      latitude: 40.7589,
-      longitude: -73.9851,
-      locationType: 'PRODUCTION_FACILITY',
-      userId: productionClient.id,
-    },
-  });
-
-  const distributionCenter = await prisma.location.upsert({
-    where: { id: 'distribution-center-1' },
-    update: {},
-    create: {
-      id: 'distribution-center-1',
-      name: 'Central Distribution Center',
-      address: '789 Distribution Ave, Commerce District',
-      latitude: 40.7306,
-      longitude: -73.9352,
-      locationType: 'DISTRIBUTION_CENTER',
-      userId: distributor.id,
-    },
-  });
-
-  console.log('✅ Locations created');
 
   console.log('Creating products...');
 
@@ -180,43 +182,110 @@ async function main() {
 
   console.log('✅ Products created');
 
-  console.log('Creating initial stock...');
+  console.log('Creating initial stock for all products...');
 
-  await prisma.rawMaterialStock.upsert({
-    where: {
-      productId_locationId: {
-        productId: steelRod.id,
-        locationId: rawWarehouse.id,
-      },
-    },
-    update: {},
-    create: {
-      productId: steelRod.id,
-      locationId: rawWarehouse.id,
-      quantity: 1000,
-      reservedQty: 0,
-      availableQty: 1000,
-    },
+  // Get all existing products from database
+  const allProducts = await prisma.product.findMany({
+    where: { isActive: true },
   });
 
-  await prisma.rawMaterialStock.upsert({
-    where: {
-      productId_locationId: {
-        productId: plasticPellets.id,
-        locationId: rawWarehouse.id,
-      },
-    },
-    update: {},
-    create: {
-      productId: plasticPellets.id,
-      locationId: rawWarehouse.id,
-      quantity: 5000,
-      reservedQty: 0,
-      availableQty: 5000,
-    },
+  // Get all locations by type
+  const rawWarehouses = await prisma.location.findMany({
+    where: { locationType: 'RAW_WAREHOUSE' },
   });
 
-  console.log('✅ Stock created');
+  const productionFacilities = await prisma.location.findMany({
+    where: { locationType: 'PRODUCTION_FACILITY' },
+  });
+
+  const distributionCenters = await prisma.location.findMany({
+    where: { locationType: 'DISTRIBUTION_CENTER' },
+  });
+
+  // Populate stock for all products
+  for (const product of allProducts) {
+    if (product.type === 'RAW_MATERIAL') {
+      // Raw materials should have stock at raw warehouses and production facilities
+      for (const warehouse of rawWarehouses) {
+        await prisma.rawMaterialStock.upsert({
+          where: {
+            productId_locationId: {
+              productId: product.id,
+              locationId: warehouse.id,
+            },
+          },
+          update: {},
+          create: {
+            productId: product.id,
+            locationId: warehouse.id,
+            quantity: 1000,
+            reservedQty: 0,
+            availableQty: 1000,
+          },
+        });
+      }
+
+      for (const facility of productionFacilities) {
+        await prisma.productionStock.upsert({
+          where: {
+            productId_locationId: {
+              productId: product.id,
+              locationId: facility.id,
+            },
+          },
+          update: {},
+          create: {
+            productId: product.id,
+            locationId: facility.id,
+            quantity: 500,
+            reservedQty: 0,
+            availableQty: 500,
+          },
+        });
+      }
+    } else if (product.type === 'FINISHED_PRODUCT') {
+      // Finished products should have stock at production facilities and distribution centers
+      for (const facility of productionFacilities) {
+        await prisma.productionStock.upsert({
+          where: {
+            productId_locationId: {
+              productId: product.id,
+              locationId: facility.id,
+            },
+          },
+          update: {},
+          create: {
+            productId: product.id,
+            locationId: facility.id,
+            quantity: 300,
+            reservedQty: 0,
+            availableQty: 300,
+          },
+        });
+      }
+
+      for (const center of distributionCenters) {
+        await prisma.finishedProductStock.upsert({
+          where: {
+            productId_locationId: {
+              productId: product.id,
+              locationId: center.id,
+            },
+          },
+          update: {},
+          create: {
+            productId: product.id,
+            locationId: center.id,
+            quantity: 2000,
+            reservedQty: 0,
+            availableQty: 2000,
+          },
+        });
+      }
+    }
+  }
+
+  console.log(`✅ Stock created for ${allProducts.length} products across all locations`);
 
   console.log('Creating transport provider...');
 
@@ -262,11 +331,29 @@ async function main() {
   console.log('✅ Database seeded successfully!');
   console.log('='.repeat(50));
   console.log('\nTest Accounts:');
-  console.log('Manager: manager@logistics.com / manager123');
-  console.log('Raw Stock Manager: rawstock@logistics.com / stock123');
-  console.log('Production Client: production@logistics.com / production123');
-  console.log('Distributor: distributor@logistics.com / distributor123');
-  console.log('Transport Provider: transport@logistics.com / transport123');
+  console.log('Manager: manager@example.com / securePassword123');
+  console.log('  Role: MANAGER (Full access, no location assigned)');
+  console.log('\nRaw Stock Manager: stockmanager@example.com / securePassword123');
+  console.log('  Role: RAW_STOCK_MANAGER');
+  console.log('  Location: Main Raw Materials Warehouse');
+  console.log('\nProduction Client: production@example.com / securePassword123');
+  console.log('  Role: PRODUCTION_CLIENT');
+  console.log('  Location: Main Production Facility');
+  console.log('\nDistributor: distributor@example.com / securePassword123');
+  console.log('  Role: DISTRIBUTOR');
+  console.log('  Location: Central Distribution Center');
+  console.log('\nTransport Provider: transport@example.com / securePassword123');
+  console.log('  Role: TRANSPORT_PROVIDER');
+  console.log('='.repeat(50));
+  console.log('\nLocations Created:');
+  console.log('1. Main Raw Materials Warehouse (RAW_WAREHOUSE)');
+  console.log('2. Main Production Facility (PRODUCTION_FACILITY)');
+  console.log('3. Central Distribution Center (DISTRIBUTION_CENTER)');
+  console.log('='.repeat(50));
+  console.log('\nTransport Resources:');
+  console.log('✅ Transport Provider: Fast Transport Co.');
+  console.log('✅ Vehicle 1: Heavy Truck 1 (TRUCK-001) - 5000kg capacity');
+  console.log('✅ Vehicle 2: Delivery Van 1 (VAN-001) - 1000kg capacity');
   console.log('='.repeat(50));
 }
 

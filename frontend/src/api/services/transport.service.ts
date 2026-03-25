@@ -123,4 +123,25 @@ export const transportService = {
     );
     return (response.data as any).data;
   },
+
+  // Get active transport providers
+  getTransportProviders: async (): Promise<TransportProvider[]> => {
+    const response = await apiClient.get<
+      ApiResponse<{ providers: TransportProvider[] }>
+    >(endpoints.transport.providers);
+    return (response.data as any).data.providers || [];
+  },
+
+  // Calculate transport cost with weight and distance
+  calculateTransportCost: async (
+    providerId: string,
+    totalWeight: number,
+    distanceKm: number
+  ): Promise<TransportCostResponse> => {
+    return this.calculateCost({
+      providerId,
+      totalWeight,
+      distanceKm,
+    });
+  },
 };

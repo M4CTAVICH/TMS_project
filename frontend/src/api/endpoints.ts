@@ -45,6 +45,7 @@ export const endpoints = {
     production: "/stock/production",
     finishedProduct: "/stock/finished-product",
     overview: "/stock/overview",
+    availableProducts: (locationId: string) => `/stock/location/${locationId}/available-products`,
     updateRawMaterial: (productId: string, locationId: string) =>
       `/stock/raw-material/${productId}/${locationId}`,
     updateProduction: (productId: string, locationId: string) =>

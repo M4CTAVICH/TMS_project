@@ -8,7 +8,8 @@ interface CreateOrderDTO {
   type: 'RAW_MATERIAL_ORDER' | 'FINISHED_PRODUCT_ORDER';
   createdById: string;
   fromLocationId: string;
-  toLocationId: string;
+  toLocationId?: string; // Optional - will be auto-filled for non-MANAGER
+  confirmingUserId: string; // User at fromLocation who will confirm the order
   transportProviderId: string;
   items: Array<{
     productId: string;
@@ -25,7 +26,38 @@ export class OrderService {
 
  
   async createOrder(data: CreateOrderDTO) {
-    const { type, createdById, fromLocationId, toLocationId, transportProviderId, items } = data;
+    const { type, createdById, fromLocationId, confirmingUserId, transportProviderId, items } = data;
+    let { toLocationId } = data;
+
+    // Validate confirming user exists and is at the fromLocation
+    const confirmingUser = await prisma.user.findUnique({
+      where: { id: confirmingUserId },
+      select: { locationId: true, id: true },
+    });
+
+    if (!confirmingUser || confirmingUser.locationId !== fromLocationId) {
+      throw new BadRequestError('Confirming user must be located at the from location');
+    }
+
+    // Get creator user info
+    const creatorUser = await prisma.user.findUnique({
+      where: { id: createdById },
+      select: { role: true, locationId: true },
+    });
+
+    if (!creatorUser) {
+      throw new NotFoundError('Creator user not found');
+    }
+
+    // Auto-fill toLocation for non-MANAGER users
+    if (creatorUser.role !== 'MANAGER') {
+      if (!creatorUser.locationId) {
+        throw new BadRequestError('User has no assigned location');
+      }
+      toLocationId = creatorUser.locationId;
+    } else if (!toLocationId) {
+      throw new BadRequestError('Manager must specify a to location');
+    }
 
     const [fromLocation, toLocation] = await Promise.all([
       prisma.location.findUnique({ where: { id: fromLocationId } }),
@@ -91,6 +123,7 @@ export class OrderService {
           orderNumber,
           type,
           createdById,
+          confirmingUserId,
           fromLocationId,
           toLocationId,
           transportTotal,

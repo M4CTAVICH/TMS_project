@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usersService } from "../api/services/users.service";
 import type { CreateUserRequest, UpdateUserRequest } from "../api/services/users.service";
 import { toast } from "sonner";
+import { useAuthStore } from "../store/authStore";
 
 export const useUsers = (page = 1, limit = 20, role?: string) => {
   const queryClient = useQueryClient();
@@ -15,7 +16,20 @@ export const useUsers = (page = 1, limit = 20, role?: string) => {
 
   // Create user
   const createUserMutation = useMutation({
-    mutationFn: (userData: CreateUserRequest) => usersService.createUser(userData),
+    mutationFn: (userData: CreateUserRequest) => {
+      // Ensure token is available before making request
+      const authState = useAuthStore.getState();
+      const currentToken = authState.token;
+      
+      if (!currentToken) {
+        throw new Error("Authentication token not found. Please log in again.");
+      }
+      
+      // Ensure token is in localStorage for interceptor
+      localStorage.setItem("auth_token", currentToken);
+      
+      return usersService.createUser(userData);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User created successfully");
@@ -27,8 +41,20 @@ export const useUsers = (page = 1, limit = 20, role?: string) => {
 
   // Update user
   const updateUserMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateUserRequest }) =>
-      usersService.updateUser(id, data),
+    mutationFn: ({ id, data }: { id: string; data: UpdateUserRequest }) => {
+      // Ensure token is available before making request
+      const authState = useAuthStore.getState();
+      const currentToken = authState.token;
+      
+      if (!currentToken) {
+        throw new Error("Authentication token not found. Please log in again.");
+      }
+      
+      // Ensure token is in localStorage for interceptor
+      localStorage.setItem("auth_token", currentToken);
+      
+      return usersService.updateUser(id, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User updated successfully");
@@ -40,7 +66,20 @@ export const useUsers = (page = 1, limit = 20, role?: string) => {
 
   // Delete user
   const deleteUserMutation = useMutation({
-    mutationFn: (id: string) => usersService.deleteUser(id),
+    mutationFn: (id: string) => {
+      // Ensure token is available before making request
+      const authState = useAuthStore.getState();
+      const currentToken = authState.token;
+      
+      if (!currentToken) {
+        throw new Error("Authentication token not found. Please log in again.");
+      }
+      
+      // Ensure token is in localStorage for interceptor
+      localStorage.setItem("auth_token", currentToken);
+      
+      return usersService.deleteUser(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User deleted successfully");
@@ -52,7 +91,20 @@ export const useUsers = (page = 1, limit = 20, role?: string) => {
 
   // Activate user
   const activateUserMutation = useMutation({
-    mutationFn: (id: string) => usersService.activateUser(id),
+    mutationFn: (id: string) => {
+      // Ensure token is available before making request
+      const authState = useAuthStore.getState();
+      const currentToken = authState.token;
+      
+      if (!currentToken) {
+        throw new Error("Authentication token not found. Please log in again.");
+      }
+      
+      // Ensure token is in localStorage for interceptor
+      localStorage.setItem("auth_token", currentToken);
+      
+      return usersService.activateUser(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User activated successfully");
@@ -64,7 +116,20 @@ export const useUsers = (page = 1, limit = 20, role?: string) => {
 
   // Deactivate user
   const deactivateUserMutation = useMutation({
-    mutationFn: (id: string) => usersService.deactivateUser(id),
+    mutationFn: (id: string) => {
+      // Ensure token is available before making request
+      const authState = useAuthStore.getState();
+      const currentToken = authState.token;
+      
+      if (!currentToken) {
+        throw new Error("Authentication token not found. Please log in again.");
+      }
+      
+      // Ensure token is in localStorage for interceptor
+      localStorage.setItem("auth_token", currentToken);
+      
+      return usersService.deactivateUser(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User deactivated successfully");

@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL } from "./endpoints";
 import type { ApiError, ApiResponse } from "../types/api.types";
+import { useAuthStore } from "../store/authStore";
 
 // Create axios instance
 export const apiClient = axios.create({
@@ -14,10 +15,29 @@ export const apiClient = axios.create({
 // Request interceptor - Add auth token to all requests
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem("auth_token");
+    // Try to get token from localStorage first (most reliable during SSR/SSG)
+    let token = localStorage.getItem("auth_token");
+    
+    // If not in localStorage, try auth store
+    if (!token) {
+      try {
+        const authState = useAuthStore.getState();
+        token = authState.token;
+      } catch (error) {
+        console.warn("Failed to get token from auth store:", error);
+      }
+    }
 
-    if (token && config.headers) {
+    // Ensure headers object exists
+    if (!config.headers) {
+      config.headers = {} as any;
+    }
+
+    // Add token to Authorization header
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn("No authentication token available for request to", config.url);
     }
 
     return config;

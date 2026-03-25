@@ -8,12 +8,16 @@ import {
   getFinishedProductStock,
   updateFinishedProductStock,
   getStockOverview,
+  getAvailableProductsAtLocation,
 } from './stock.controller';
 import { validate } from '../../shared/middleware/validator';
 import { authenticate, authorize } from '../../shared/middleware/auth';
 import { ROLES } from '../../config/constants';
 
 const router = Router();
+
+// Public endpoint for getting available products at a location
+router.get('/location/:locationId/available-products', getAvailableProductsAtLocation);
 
 router.use(authenticate);
 
@@ -66,5 +70,8 @@ router.put(
   ],
   updateFinishedProductStock
 );
+
+// Get available products at a location for order creation
+router.get('/location/:locationId/available-products', getAvailableProductsAtLocation);
 
 export default router;

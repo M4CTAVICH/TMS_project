@@ -1116,10 +1116,9 @@ const ProviderFormModal = ({
       setLoadingUsers(true);
       try {
         const response = await apiClient.get("/users");
-
-        const allUsers: UserType[] = Array.isArray(response.data)
-          ? response.data
-          : [];
+        
+        // Extract users from response - API returns { data: [...], meta: {...} }
+        const allUsers: UserType[] = response.data?.data || [];
 
         // Get user IDs that already have providers
         const usersWithProviders = new Set(
