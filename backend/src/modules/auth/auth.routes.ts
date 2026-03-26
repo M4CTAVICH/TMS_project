@@ -5,11 +5,13 @@ import {
   verifyToken,
   changePassword,
   getProfile,
+  updateProfile,
+  createUser,
 } from "./auth.controller";
 import { validate } from "../../shared/middleware/validator";
 import { authenticate, authorize } from "../../shared/middleware/auth";
-import { createUser } from "./auth.controller";
 import { ROLES } from "../../config/constants";
+
 const router = Router();
 
 router.post(
@@ -26,6 +28,34 @@ router.get("/verify", verifyToken);
 
 router.get("/profile", authenticate, getProfile);
 
+router.put(
+  "/profile",
+  authenticate,
+  [
+    body("firstName")
+      .optional()
+      .isString()
+      .withMessage("First name must be a string")
+      .trim()
+      .notEmpty()
+      .withMessage("First name cannot be empty"),
+    body("lastName")
+      .optional()
+      .isString()
+      .withMessage("Last name must be a string")
+      .trim()
+      .notEmpty()
+      .withMessage("Last name cannot be empty"),
+    body("email")
+      .optional()
+      .isEmail()
+      .withMessage("Valid email is required")
+      .normalizeEmail(),
+    validate,
+  ],
+  updateProfile,
+);
+
 router.post(
   "/change-password",
   authenticate,
@@ -40,6 +70,7 @@ router.post(
   ],
   changePassword,
 );
+
 router.post(
   "/users",
   authenticate,
