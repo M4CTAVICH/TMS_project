@@ -19,6 +19,8 @@ import type { OrderStatus } from "../types/api.types";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useOrders } from "../hooks/useOrders";
+import { RouteMap } from "../components/map";
+
 import { useAuthStore } from "../store/authStore";
 
 const formatMoney = (value: number) => `$${value.toFixed(2)}`;
@@ -325,6 +327,13 @@ export const OrderDetailsPage = () => {
                   {order.distanceKm.toFixed(2)} km
                 </span>
               </div>
+            </div>
+            <div className="mt-4">
+              <RouteMap
+                from={order.fromLocation as any}
+                to={order.toLocation as any}
+                height={280}
+              />
             </div>
           </div>
 
