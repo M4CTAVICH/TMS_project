@@ -29,8 +29,37 @@ type StockTable =
   | "productionStock"
   | "finishedProductStock";
 
+type OrderStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "PREPARING"
+  | "IN_TRANSIT"
+  | "DELIVERED"
+  | "CANCELLED";
+
+const ORDER_STATUSES: OrderStatus[] = [
+  "PENDING",
+  "CONFIRMED",
+  "PREPARING",
+  "IN_TRANSIT",
+  "DELIVERED",
+  "CANCELLED",
+];
+
 export class OrderService {
   private transportService: TransportService;
+
+  private readonly allowedStatusTransitions: Record<
+    OrderStatus,
+    OrderStatus[]
+  > = {
+    PENDING: ["CONFIRMED", "CANCELLED"],
+    CONFIRMED: ["PREPARING", "CANCELLED"],
+    PREPARING: ["IN_TRANSIT", "CANCELLED"],
+    IN_TRANSIT: ["DELIVERED", "CANCELLED"],
+    DELIVERED: [],
+    CANCELLED: [],
+  };
 
   constructor() {
     this.transportService = new TransportService();
@@ -293,6 +322,26 @@ export class OrderService {
     return this.getOrderById(order.id);
   }
 
+  private isOrderStatus(value: string): value is OrderStatus {
+    return ORDER_STATUSES.includes(value as OrderStatus);
+  }
+
+  private assertValidStatusTransition(
+    currentStatus: OrderStatus,
+    nextStatus: OrderStatus,
+  ) {
+    if (currentStatus === nextStatus) {
+      throw new BadRequestError(`Order is already in status ${currentStatus}`);
+    }
+
+    const allowedNextStatuses = this.allowedStatusTransitions[currentStatus];
+    if (!allowedNextStatuses.includes(nextStatus)) {
+      throw new BadRequestError(
+        `Invalid status transition: ${currentStatus} -> ${nextStatus}`,
+      );
+    }
+  }
+
   private getSourceStockTable(
     orderType: CreateOrderDTO["type"],
     fromLocationType: string,
@@ -300,7 +349,6 @@ export class OrderService {
     if (orderType === "RAW_MATERIAL_ORDER") return "rawMaterialStock";
     if (orderType === "FINISHED_PRODUCT_ORDER") return "finishedProductStock";
 
-    // DELIVERY
     if (fromLocationType === "PRODUCTION_FACILITY") return "productionStock";
     return "finishedProductStock";
   }
@@ -558,6 +606,10 @@ export class OrderService {
   }
 
   async updateOrderStatus(id: string, status: string) {
+    if (!this.isOrderStatus(status)) {
+      throw new BadRequestError(`Invalid order status: ${status}`);
+    }
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
@@ -575,10 +627,21 @@ export class OrderService {
       throw new NotFoundError("Order not found");
     }
 
-    await prisma.$transaction(async (tx) => {
-      const data: any = { status };
+    const currentStatus = order.status as OrderStatus;
+    const nextStatus = status as OrderStatus;
 
-      if (status === "DELIVERED") {
+    if (!this.isOrderStatus(currentStatus)) {
+      throw new BadRequestError(
+        `Unknown current order status: ${order.status}`,
+      );
+    }
+
+    this.assertValidStatusTransition(currentStatus, nextStatus);
+
+    await prisma.$transaction(async (tx) => {
+      const data: any = { status: nextStatus };
+
+      if (nextStatus === "DELIVERED") {
         data.deliveryDate = new Date();
 
         await this.releaseAndDeductStock(
@@ -608,7 +671,7 @@ export class OrderService {
         }
       }
 
-      if (status === "CANCELLED") {
+      if (nextStatus === "CANCELLED") {
         await this.releaseReservedStock(
           tx,
           order.type,
@@ -632,7 +695,7 @@ export class OrderService {
         }
       }
 
-      if (status === "IN_TRANSIT" && order.transportJob) {
+      if (nextStatus === "IN_TRANSIT" && order.transportJob) {
         await tx.transportJob.update({
           where: { id: order.transportJob.id },
           data: { status: "IN_PROGRESS" },

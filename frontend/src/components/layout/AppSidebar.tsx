@@ -23,6 +23,7 @@ import {
   Factory,
   LogOut,
   Users,
+  BarChart3,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -85,10 +86,16 @@ export function AppSidebar() {
       path: "/users",
       roles: ["MANAGER"],
     },
+    {
+      label: "Job Analytics",
+      icon: BarChart3,
+      path: "/analytics",
+      roles: ["MANAGER"],
+    },
   ];
 
   const filteredNavItems = navItems.filter((item) =>
-    item.roles.includes(user?.role || "")
+    item.roles.includes(user?.role || ""),
   );
 
   return (

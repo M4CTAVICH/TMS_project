@@ -14,7 +14,7 @@ export const productsService = {
   getProducts: async (
     page = 1,
     limit = 20,
-    type?: ProductType
+    type?: ProductType,
   ): Promise<{ products: Product[]; meta: PaginationMeta }> => {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -23,7 +23,7 @@ export const productsService = {
     });
 
     const response = await apiClient.get<ApiResponse<Product[]>>(
-      `${endpoints.products.base}?${params}`
+      `${endpoints.products.base}?${params}`,
     );
 
     return {
@@ -35,7 +35,7 @@ export const productsService = {
   // Get product by ID
   getProductById: async (id: string): Promise<Product> => {
     const response = await apiClient.get<ApiResponse<{ product: Product }>>(
-      endpoints.products.byId(id)
+      endpoints.products.byId(id),
     );
     return (response.data as any).data.product;
   },
@@ -43,7 +43,7 @@ export const productsService = {
   // Get raw materials only
   getRawMaterials: async (
     page = 1,
-    limit = 20
+    limit = 20,
   ): Promise<{ products: Product[]; meta: PaginationMeta }> => {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -51,7 +51,7 @@ export const productsService = {
     });
 
     const response = await apiClient.get<ApiResponse<Product[]>>(
-      `${endpoints.products.rawMaterials}?${params}`
+      `${endpoints.products.rawMaterials}?${params}`,
     );
 
     return {
@@ -63,7 +63,7 @@ export const productsService = {
   // Get finished products only
   getFinishedProducts: async (
     page = 1,
-    limit = 20
+    limit = 20,
   ): Promise<{ products: Product[]; meta: PaginationMeta }> => {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -71,7 +71,7 @@ export const productsService = {
     });
 
     const response = await apiClient.get<ApiResponse<Product[]>>(
-      `${endpoints.products.finishedProducts}?${params}`
+      `${endpoints.products.finishedProducts}?${params}`,
     );
 
     return {
@@ -82,23 +82,27 @@ export const productsService = {
 
   // Create product (Manager only)
   createProduct: async (data: CreateProductRequest): Promise<Product> => {
+    const { unitPrice, ...payload } = data as any;
     const response = await apiClient.post<ApiResponse<{ product: Product }>>(
       endpoints.products.base,
-      data
+      payload,
     );
-    return (response.data as any).data.product;
+    const product = (response.data as any).data.product;
+    return { ...product, unitPrice: 0 };
   },
 
   // Update product (Manager only)
   updateProduct: async (
     id: string,
-    data: Partial<CreateProductRequest>
+    data: Partial<CreateProductRequest>,
   ): Promise<Product> => {
+    const { unitPrice, ...payload } = data as any;
     const response = await apiClient.put<ApiResponse<{ product: Product }>>(
       endpoints.products.byId(id),
-      data
+      payload,
     );
-    return (response.data as any).data.product;
+    const product = (response.data as any).data.product;
+    return { ...product, unitPrice: 0 };
   },
 
   // Delete product (Manager only)
