@@ -1,4 +1,3 @@
-// src/api/services/products.service.ts
 import { apiClient } from "../client";
 import { endpoints } from "../endpoints";
 import type {
@@ -82,13 +81,11 @@ export const productsService = {
 
   // Create product (Manager only)
   createProduct: async (data: CreateProductRequest): Promise<Product> => {
-    const { unitPrice, ...payload } = data as any;
     const response = await apiClient.post<ApiResponse<{ product: Product }>>(
       endpoints.products.base,
-      payload,
+      data,
     );
-    const product = (response.data as any).data.product;
-    return { ...product, unitPrice: 0 };
+    return (response.data as any).data.product;
   },
 
   // Update product (Manager only)
@@ -96,13 +93,11 @@ export const productsService = {
     id: string,
     data: Partial<CreateProductRequest>,
   ): Promise<Product> => {
-    const { unitPrice, ...payload } = data as any;
     const response = await apiClient.put<ApiResponse<{ product: Product }>>(
       endpoints.products.byId(id),
-      payload,
+      data,
     );
-    const product = (response.data as any).data.product;
-    return { ...product, unitPrice: 0 };
+    return (response.data as any).data.product;
   },
 
   // Delete product (Manager only)

@@ -75,50 +75,165 @@ const parseNumeric = (value: unknown): number => {
   return 0;
 };
 
-const extractDistanceKm = (value: any): number =>
-  parseNumeric(
+const unwrapApiPayload = (input: any): any => {
+  let cur = input;
+
+  // AxiosResponse -> data
+  if (cur && typeof cur === "object" && "data" in cur) {
+    cur = cur.data;
+  }
+
+  // unwrap wrappers like { success, data } or nested { data: { ... } }
+  let guard = 0;
+  while (cur && typeof cur === "object" && guard < 6) {
+    guard++;
+
+    if ("success" in cur && "data" in cur) {
+      cur = cur.data;
+      continue;
+    }
+
+    // If object is mainly a wrapper with nested data, unwrap once more
+    if ("data" in cur && Object.keys(cur).length <= 2) {
+      cur = cur.data;
+      continue;
+    }
+
+    break;
+  }
+
+  return cur;
+};
+
+const extractDistanceKm = (raw: any): number => {
+  const value = unwrapApiPayload(raw);
+  return parseNumeric(
     value?.distanceKm ??
       value?.distance ??
       value?.distance?.distanceKm ??
-      value?.data?.distanceKm ??
-      value?.data?.distance ??
-      value?.data?.distance?.distanceKm ??
       value?.result?.distanceKm ??
-      value?.result?.distance,
+      value?.result?.distance ??
+      value?.meta?.distanceKm,
   );
+};
 
-const extractTransportCost = (value: any): number => {
-  const direct =
-    value?.totalCost ??
-    value?.transportCost ??
-    value?.cost ??
-    value?.total ??
-    value?.data?.totalCost ??
-    value?.data?.transportCost ??
-    value?.data?.cost ??
-    value?.data?.total ??
-    value?.result?.totalCost ??
-    value?.quote?.totalCost ??
-    value?.pricing?.totalCost ??
-    value?.pricing?.total;
+const deepFindNumberByKeys = (
+  input: any,
+  keyMatchers: Array<string | RegExp>,
+): number | null => {
+  const seen = new Set<any>();
 
-  const parsedDirect = parseNumeric(direct);
-  if (parsedDirect > 0) return parsedDirect;
+  const keyMatch = (k: string) =>
+    keyMatchers.some((m) => (typeof m === "string" ? m === k : m.test(k)));
+
+  const walk = (obj: any): number | null => {
+    if (obj == null || typeof obj !== "object") return null;
+    if (seen.has(obj)) return null;
+    seen.add(obj);
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        const found = walk(item);
+        if (found !== null) return found;
+      }
+      return null;
+    }
+
+    for (const [k, v] of Object.entries(obj)) {
+      if (keyMatch(k)) {
+        const n = parseNumeric(v);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+    }
+
+    for (const v of Object.values(obj)) {
+      const found = walk(v);
+      if (found !== null) return found;
+    }
+
+    return null;
+  };
+
+  return walk(input);
+};
+
+const extractTransportCost = (raw: any): number => {
+  const value = unwrapApiPayload(raw);
+
+  const candidates = [
+    // direct
+    value?.totalCost,
+    value?.transportTotal,
+    value?.transportCost,
+    value?.estimatedCost,
+    value?.finalCost,
+    value?.cost,
+    value?.price,
+    value?.amount,
+    value?.total,
+
+    // nested known response shapes
+    value?.order?.transportTotal,
+    value?.order?.transportJob?.totalCost,
+    value?.transportJob?.totalCost,
+
+    // common wrappers
+    value?.data?.totalCost,
+    value?.data?.transportTotal,
+    value?.data?.transportCost,
+    value?.data?.cost,
+    value?.data?.total,
+    value?.data?.price,
+    value?.data?.amount,
+
+    value?.result?.totalCost,
+    value?.result?.transportTotal,
+    value?.result?.transportCost,
+    value?.result?.cost,
+    value?.result?.total,
+
+    value?.quote?.totalCost,
+    value?.quote?.cost,
+    value?.pricing?.totalCost,
+    value?.pricing?.total,
+  ];
+
+  for (const c of candidates) {
+    const n = parseNumeric(c);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
 
   const allocations =
     value?.allocations ??
+    value?.order?.transportJob?.allocations ??
+    value?.transportJob?.allocations ??
     value?.data?.allocations ??
     value?.result?.allocations ??
     [];
+
   if (Array.isArray(allocations) && allocations.length > 0) {
     const sum = allocations.reduce(
-      (acc: number, a: any) => acc + parseNumeric(a?.cost),
+      (acc: number, a: any) =>
+        acc + parseNumeric(a?.cost ?? a?.price ?? a?.amount),
       0,
     );
-    return Number.isFinite(sum) ? sum : 0;
+    if (Number.isFinite(sum) && sum > 0) return sum;
   }
 
-  return 0;
+  const deep = deepFindNumberByKeys(value, [
+    "transportTotal",
+    "totalCost",
+    "transportCost",
+    "estimatedCost",
+    "finalCost",
+    "cost",
+    "price",
+    "amount",
+    /^total.*(cost|price|amount)$/i,
+    /(transport).*(cost|price|amount)/i,
+  ]);
+
+  return deep && deep > 0 ? deep : 0;
 };
 
 const normalizeRole = (role?: string | null) => (role || "").toUpperCase();
@@ -156,7 +271,6 @@ export const OrderCreationPage = () => {
   const [selectedProducts, setSelectedProducts] = useState<OrderItem[]>([]);
   const [transportProviderId, setTransportProviderId] = useState<string>("");
 
-  // Backend behavior: non-DELIVERY orders use creator location as destination
   const effectiveToLocationId =
     mode === "ORDER" ? user?.locationId || "" : selectedToLocation;
 
@@ -265,6 +379,131 @@ export const OrderCreationPage = () => {
       ),
     [transportProviders],
   );
+
+  const { data: providerQuotesRaw, isFetching: isLoadingProviderQuotes } =
+    useQuery({
+      queryKey: [
+        "provider-quotes-simple",
+        providersWithAvailableVehicles.map((p) => p.id).join(","),
+        totalWeight,
+        distanceKm,
+      ],
+      enabled:
+        step >= 4 &&
+        providersWithAvailableVehicles.length > 0 &&
+        totalWeight > 0 &&
+        distanceKm > 0,
+      queryFn: async () => {
+        const rows = await Promise.all(
+          providersWithAvailableVehicles.map(async (p) => {
+            try {
+              const res = await transportService.calculateTransportCost(
+                p.id,
+                totalWeight,
+                distanceKm,
+              );
+              return { providerId: p.id, cost: extractTransportCost(res) };
+            } catch {
+              return { providerId: p.id, cost: Number.NaN };
+            }
+          }),
+        );
+        return rows;
+      },
+    });
+
+  const providerQuoteMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of providerQuotesRaw || []) {
+      if (Number.isFinite(row.cost) && row.cost > 0) {
+        map.set(row.providerId, row.cost);
+      }
+    }
+    return map;
+  }, [providerQuotesRaw]);
+
+  const selectedProviderQuotedCost = useMemo(
+    () => providerQuoteMap.get(transportProviderId),
+    [providerQuoteMap, transportProviderId],
+  );
+
+  const effectiveTransportCost = useMemo(() => {
+    if (transportCost > 0) return transportCost;
+    if (
+      typeof selectedProviderQuotedCost === "number" &&
+      selectedProviderQuotedCost > 0
+    ) {
+      return selectedProviderQuotedCost;
+    }
+    return 0;
+  }, [transportCost, selectedProviderQuotedCost]);
+
+  const getReliability = (p: ProviderLike): number => {
+    const total = (p.vehicles || []).length;
+    if (!total) return 0;
+    const available = (p.vehicles || []).filter(
+      (v) => (v.status || "").toUpperCase() === "AVAILABLE",
+    ).length;
+    return (available / total) * 100;
+  };
+
+  const cheapestProviderId = useMemo(() => {
+    let bestId: string | null = null;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (const p of providersWithAvailableVehicles) {
+      const cost = providerQuoteMap.get(p.id);
+      if (typeof cost === "number" && cost > 0 && cost < bestCost) {
+        bestCost = cost;
+        bestId = p.id;
+      }
+    }
+    return bestId;
+  }, [providersWithAvailableVehicles, providerQuoteMap]);
+
+  const mostReliableProviderId = useMemo(() => {
+    if (!providersWithAvailableVehicles.length) return null;
+    let best = providersWithAvailableVehicles[0];
+    let bestScore = getReliability(best);
+    for (const p of providersWithAvailableVehicles.slice(1)) {
+      const score = getReliability(p);
+      if (score > bestScore) {
+        best = p;
+        bestScore = score;
+      }
+    }
+    return best.id;
+  }, [providersWithAvailableVehicles]);
+
+  const suggestedProviders = useMemo(() => {
+    const out: ProviderLike[] = [];
+    const seen = new Set<string>();
+
+    if (cheapestProviderId) {
+      const p = providersWithAvailableVehicles.find(
+        (x) => x.id === cheapestProviderId,
+      );
+      if (p && !seen.has(p.id)) {
+        out.push(p);
+        seen.add(p.id);
+      }
+    }
+
+    if (mostReliableProviderId) {
+      const p = providersWithAvailableVehicles.find(
+        (x) => x.id === mostReliableProviderId,
+      );
+      if (p && !seen.has(p.id)) {
+        out.push(p);
+        seen.add(p.id);
+      }
+    }
+
+    return out;
+  }, [
+    providersWithAvailableVehicles,
+    cheapestProviderId,
+    mostReliableProviderId,
+  ]);
 
   const requiredConfirmingRoles = useMemo(() => {
     if (selectedProducts.length > 0) {
@@ -780,30 +1019,107 @@ export const OrderCreationPage = () => {
                   No providers with AVAILABLE vehicles.
                 </div>
               ) : (
-                <div className="grid gap-3">
-                  {providersWithAvailableVehicles.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setTransportProviderId(p.id)}
-                      className={`text-left p-4 rounded-lg border ${
-                        transportProviderId === p.id
-                          ? "border-blue-500 bg-blue-500/10"
-                          : "border-gray-700 bg-gray-800"
-                      }`}
-                    >
-                      <p className="text-white font-medium">{p.name}</p>
+                <>
+                  <div className="mb-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-cyan-300">
+                        Suggested
+                      </h3>
+                      {isLoadingProviderQuotes && (
+                        <p className="text-xs text-blue-300 flex items-center gap-1">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Loading quotes...
+                        </p>
+                      )}
+                    </div>
+
+                    {suggestedProviders.length === 0 ? (
                       <p className="text-sm text-gray-400">
-                        AVAILABLE vehicles:{" "}
-                        {
-                          (p.vehicles || []).filter(
-                            (v) =>
-                              (v.status || "").toUpperCase() === "AVAILABLE",
-                          ).length
-                        }
+                        No suggestions yet.
                       </p>
-                    </button>
-                  ))}
-                </div>
+                    ) : (
+                      <div className="grid gap-3">
+                        {suggestedProviders.map((p) => {
+                          const isCheapest = p.id === cheapestProviderId;
+                          const isReliable = p.id === mostReliableProviderId;
+                          const reliability = getReliability(p);
+                          return (
+                            <button
+                              key={`suggested-${p.id}`}
+                              onClick={() => setTransportProviderId(p.id)}
+                              className={`text-left p-4 rounded-lg border ${
+                                transportProviderId === p.id
+                                  ? "border-blue-500 bg-blue-500/10"
+                                  : "border-cyan-700/40 bg-cyan-500/5"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <p className="text-white font-medium">
+                                  {p.name}
+                                </p>
+                                <div className="flex gap-2">
+                                  {isCheapest && (
+                                    <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-300 border border-green-500/30">
+                                      Cheapest
+                                    </span>
+                                  )}
+                                  {isReliable && (
+                                    <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                      Most reliable
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-400 mt-1">
+                                Reliability: {reliability.toFixed(0)}% • Quote:{" "}
+                                {providerQuoteMap.has(p.id)
+                                  ? `$${(providerQuoteMap.get(p.id) || 0).toFixed(2)}`
+                                  : "N/A"}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-300 mb-3">
+                      All providers
+                    </h3>
+                    <div className="grid gap-3">
+                      {providersWithAvailableVehicles.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setTransportProviderId(p.id)}
+                          className={`text-left p-4 rounded-lg border ${
+                            transportProviderId === p.id
+                              ? "border-blue-500 bg-blue-500/10"
+                              : "border-gray-700 bg-gray-800"
+                          }`}
+                        >
+                          <p className="text-white font-medium">{p.name}</p>
+                          <p className="text-sm text-gray-400">
+                            AVAILABLE vehicles:{" "}
+                            {
+                              (p.vehicles || []).filter(
+                                (v) =>
+                                  (v.status || "").toUpperCase() ===
+                                  "AVAILABLE",
+                              ).length
+                            }
+                            {" • "}
+                            Reliability: {getReliability(p).toFixed(0)}%{" • "}
+                            Quote:{" "}
+                            {providerQuoteMap.has(p.id)
+                              ? `$${(providerQuoteMap.get(p.id) || 0).toFixed(2)}`
+                              : "N/A"}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className="flex gap-3 mt-6">
@@ -844,21 +1160,25 @@ export const OrderCreationPage = () => {
                 <p className="text-gray-400">
                   Transport:{" "}
                   <span className="text-green-400">
-                    ${transportCost.toFixed(2)}
+                    {effectiveTransportCost > 0
+                      ? `$${effectiveTransportCost.toFixed(2)}`
+                      : "N/A"}
                   </span>
                 </p>
+
                 {distanceKm > 0 &&
                   transportProviderId &&
                   !isQuotingCost &&
-                  transportCost <= 0 && (
+                  effectiveTransportCost <= 0 && (
                     <p className="text-yellow-300 text-sm">
-                      Quote returned 0. Please verify transport pricing response
-                      shape.
+                      Preview quote unavailable. Final cost will be computed on
+                      submit.
                     </p>
                   )}
+
                 {isQuotingCost && (
                   <p className="text-blue-300 text-sm flex items-center">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />{" "}
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     Calculating cost...
                   </p>
                 )}
