@@ -11,7 +11,8 @@ import L from "leaflet";
 
 type LatLng = [number, number];
 
-type LocationLike = {
+export type MapLocationLike = {
+  id?: string;
   name?: string;
   address?: string;
   latitude?: number | string | null;
@@ -27,7 +28,7 @@ const markerIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-const getCoord = (loc?: LocationLike | null): LatLng | null => {
+const toCoord = (loc?: MapLocationLike | null): LatLng | null => {
   if (!loc) return null;
   const lat = Number(loc.latitude ?? loc.lat);
   const lng = Number(loc.longitude ?? loc.lng);
@@ -35,7 +36,7 @@ const getCoord = (loc?: LocationLike | null): LatLng | null => {
   return [lat, lng];
 };
 
-function FitBounds({ points }: { points: LatLng[] }) {
+function FitToBounds({ points }: { points: LatLng[] }) {
   const map = useMap();
 
   useEffect(() => {
@@ -54,26 +55,26 @@ function FitBounds({ points }: { points: LatLng[] }) {
 export const RouteMap = ({
   from,
   to,
-  height = 300,
+  height = 280,
 }: {
-  from?: LocationLike | null;
-  to?: LocationLike | null;
+  from?: MapLocationLike | null;
+  to?: MapLocationLike | null;
   height?: number;
 }) => {
-  const fromCoord = getCoord(from);
-  const toCoord = getCoord(to);
+  const fromCoord = toCoord(from);
+  const toCoordValue = toCoord(to);
 
   const points = useMemo(() => {
     const p: LatLng[] = [];
     if (fromCoord) p.push(fromCoord);
-    if (toCoord) p.push(toCoord);
+    if (toCoordValue) p.push(toCoordValue);
     return p;
-  }, [fromCoord, toCoord]);
+  }, [fromCoord, toCoordValue]);
 
   if (points.length === 0) {
     return (
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-400">
-        Route map unavailable: source/destination coordinates are missing.
+        Route map unavailable: missing coordinates.
       </div>
     );
   }
@@ -90,7 +91,7 @@ export const RouteMap = ({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FitBounds points={points} />
+        <FitToBounds points={points} />
 
         {fromCoord && (
           <Marker position={fromCoord} icon={markerIcon}>
@@ -102,8 +103,8 @@ export const RouteMap = ({
           </Marker>
         )}
 
-        {toCoord && (
-          <Marker position={toCoord} icon={markerIcon}>
+        {toCoordValue && (
+          <Marker position={toCoordValue} icon={markerIcon}>
             <Popup>
               <strong>To:</strong> {to?.name ?? "Destination"}
               <br />
@@ -112,9 +113,9 @@ export const RouteMap = ({
           </Marker>
         )}
 
-        {fromCoord && toCoord && (
+        {fromCoord && toCoordValue && (
           <Polyline
-            positions={[fromCoord, toCoord]}
+            positions={[fromCoord, toCoordValue]}
             pathOptions={{ color: "#22d3ee", weight: 4 }}
           />
         )}
@@ -122,3 +123,5 @@ export const RouteMap = ({
     </div>
   );
 };
+
+export default RouteMap;

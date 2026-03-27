@@ -65,6 +65,60 @@ export class OrderService {
     this.transportService = new TransportService();
   }
 
+  private normalizeRole(role?: string | null): string {
+    return (role || "").toUpperCase();
+  }
+
+  private getRolesByLocationType(locationType: string): string[] {
+    switch ((locationType || "").toUpperCase()) {
+      case "RAW_WAREHOUSE":
+        return ["RAW_STOCK_MANAGER", "MANAGER"];
+      case "PRODUCTION_FACILITY":
+        return ["PRODUCTION_CLIENT", "MANAGER"];
+      case "FINISHED_WAREHOUSE":
+        return ["FINISHED_STOCK_MANAGER", "MANAGER"];
+      case "DISTRIBUTION_CENTER":
+        return ["DISTRIBUTOR", "MANAGER"];
+      default:
+        return ["MANAGER"];
+    }
+  }
+
+  private getAllowedConfirmingRoles(
+    type: CreateOrderDTO["type"],
+    fromLocationType: string,
+  ): string[] {
+    if (type === "RAW_MATERIAL_ORDER") {
+      return ["RAW_STOCK_MANAGER", "MANAGER"];
+    }
+
+    if (type === "FINISHED_PRODUCT_ORDER") {
+      return ["FINISHED_STOCK_MANAGER", "MANAGER"];
+    }
+
+    // DELIVERY
+    return this.getRolesByLocationType(fromLocationType);
+  }
+
+  private getAllowedDestinationRolesForDelivery(
+    toLocationType: string,
+  ): string[] {
+    return this.getRolesByLocationType(toLocationType);
+  }
+
+  private assertRoleAllowed(
+    userRole: string | undefined | null,
+    allowedRoles: string[],
+    label: string,
+  ) {
+    const role = this.normalizeRole(userRole);
+    if (!allowedRoles.includes(role)) {
+      throw new BadRequestError(
+        `${label} role is invalid. Allowed role(s): ${allowedRoles.join(", ")}`,
+      );
+    }
+  }
+
   async createOrder(data: CreateOrderDTO) {
     const {
       type,
@@ -133,7 +187,7 @@ export class OrderService {
       prisma.location.findUnique({ where: { id: toLocationId } }),
       prisma.user.findUnique({
         where: { id: confirmingUserId },
-        select: { id: true, locationId: true, isActive: true },
+        select: { id: true, role: true, locationId: true, isActive: true },
       }),
     ]);
 
@@ -150,6 +204,17 @@ export class OrderService {
         "Confirming user must be active and located at the from location",
       );
     }
+
+    // Enforce confirming user role for both ORDER and DELIVERY
+    const allowedConfirmingRoles = this.getAllowedConfirmingRoles(
+      type,
+      fromLocation.locationType,
+    );
+    this.assertRoleAllowed(
+      confirmingUser.role,
+      allowedConfirmingRoles,
+      "Confirming user",
+    );
 
     if (type === "DELIVERY") {
       if (
@@ -187,7 +252,7 @@ export class OrderService {
 
       const destinationUser = await prisma.user.findUnique({
         where: { id: destinationUserId! },
-        select: { id: true, locationId: true, isActive: true },
+        select: { id: true, role: true, locationId: true, isActive: true },
       });
 
       if (!destinationUser || !destinationUser.isActive) {
@@ -199,6 +264,15 @@ export class OrderService {
           "Destination user must belong to the destination location",
         );
       }
+
+      // Enforce destination role for delivery
+      const allowedDestinationRoles =
+        this.getAllowedDestinationRolesForDelivery(toLocation.locationType);
+      this.assertRoleAllowed(
+        destinationUser.role,
+        allowedDestinationRoles,
+        "Destination user",
+      );
     }
 
     const distanceKm = calculateDistance(
@@ -207,6 +281,10 @@ export class OrderService {
       toLocation.latitude,
       toLocation.longitude,
     );
+
+    if (distanceKm <= 0) {
+      throw new BadRequestError("Distance must be greater than 0");
+    }
 
     const order = await prisma.$transaction(async (tx) => {
       let totalWeight = 0;
